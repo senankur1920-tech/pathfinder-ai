@@ -81,16 +81,26 @@ export default function OnboardingWizard() {
     localStorage.setItem('onboarding_completed', 'true');
     localStorage.setItem('student_profile', JSON.stringify(formData));
 
-    // Sync to backend
+    // Cleanup signup draft
+    localStorage.removeItem('signup_draft');
+
+    // Navigate immediately — don't wait for backend
+    router.push('/dashboard');
+
+    // Sync to backend in background (fire-and-forget with timeout)
     try {
       const token = localStorage.getItem('auth_token') || 'guest-token';
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      await fetch(`${apiUrl}/api/v1/users/onboarding`, {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+      fetch(`${apiUrl}/api/v1/users/onboarding`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
+        signal: controller.signal,
         body: JSON.stringify({
           name: formData.name,
           email: formData.email || null,
@@ -112,14 +122,11 @@ export default function OnboardingWizard() {
           career_goal: formData.careerGoal || null,
           location_preference: formData.locationPreference,
         }),
-      });
+      }).then(() => clearTimeout(timeout))
+        .catch((err) => { clearTimeout(timeout); console.warn('Backend sync failed:', err); });
     } catch (err) {
       console.warn('Backend sync failed, profile saved locally.', err);
     }
-
-    // Cleanup signup draft
-    localStorage.removeItem('signup_draft');
-    router.push('/dashboard');
   };
 
   const toggleExam = (exam: string) => {
