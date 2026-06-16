@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+backend/venv/
+__pycache__/
+*.pyc
+
+# Build output
+.next/
+out/
+
+# Environment files (contain secrets)
+.env
+.env.local
+backend/.env
+
+# Database files
+*.db
+backend/*.db
+backend/sales_leads.csv
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Misc
+*.log
