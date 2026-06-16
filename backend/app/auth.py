@@ -1,6 +1,7 @@
 from fastapi import Header, HTTPException, Depends
 from app.config import settings
 from typing import Dict, Any
+from jose import jwt, JWTError
 
 # Try to import supabase; fall back to mock-only mode if unavailable
 try:
@@ -31,7 +32,16 @@ async def get_current_user(authorization: str = Header(None)) -> Any:
             if len(user_part) == 36:
                 mock_id = user_part
         return MockUser(user_id=mock_id, email=f"{token}@mock.pathfinder.ai")
-        
+
+    # 2.5. Verify JWT token
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if user_id:
+            return MockUser(user_id=user_id, email=payload.get("name", "user") + "@pathfinder.ai")
+    except JWTError:
+        pass  # Fall through to supabase or error
+
     # 3. Verify real token via Supabase Auth client (if available)
     if supabase_available and supabase_client:
         try:

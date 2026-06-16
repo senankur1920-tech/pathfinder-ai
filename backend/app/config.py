@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = "https://rrvisqesjvtixncigrmg.supabase.co"
     SUPABASE_ANON_KEY: str = "sb_publishable_2L_Xf33WTZQ1iJDSEs6-4A_wJl7Q9S2"
     GEMINI_API_KEY: Optional[str] = None
+    JWT_SECRET: str = "pathfinder-secret-key-change-in-production"
     PORT: int = 8000
     HOST: str = "0.0.0.0"
 

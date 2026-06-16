@@ -3,19 +3,35 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db
 from app.auth import get_current_user, MockUser
-from app.models import StudentProfile, ActivityLog
+from app.models import User, StudentProfile, ActivityLog
 from app.schemas import StudentProfileCreate, StudentProfileResponse, StudentProfileBase, UserSignup, UserLogin
+from app.config import settings
 from typing import List, Dict, Any
 import uuid
 import csv
 import os
-from datetime import datetime
+import hashlib
+from datetime import datetime, timedelta
+from jose import jwt
 from app.services.email_notifier import send_lead_email
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # Path to sales leads CSV file
 SALES_LEADS_CSV = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "sales_leads.csv")
+
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def create_token(user_id: str, name: str) -> str:
+    payload = {
+        "sub": user_id,
+        "name": name,
+        "exp": datetime.utcnow() + timedelta(days=7)
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
 
 def trigger_lead_notification(profile: StudentProfile):
@@ -117,26 +133,36 @@ def trigger_lead_notification(profile: StudentProfile):
             print(f"[SALES LEAD CSV] Error writing new row: {e}")
 
 
-# ─── Auth Mock Routes ────────────────────────────────────────────────────────
+# ─── Auth Routes ─────────────────────────────────────────────────────────────
 
 @router.post("/signup", status_code=201)
 def signup(data: UserSignup, db: Session = Depends(get_db)):
     """
-    Mock signup: creates a user_id, stores a minimal profile stub,
-    and returns a token the frontend can use for subsequent requests.
+    Register a new user: hashes the password, stores a User record,
+    and returns a signed JWT token.
     """
-    user_id = str(uuid.uuid4())
-    token = f"mock-{user_id}"
-
-    # Check for duplicate email/phone
+    # Check for duplicate email/phone in User table
     if data.email:
-        existing = db.query(StudentProfile).filter(StudentProfile.email == data.email).first()
+        existing = db.query(User).filter(User.email == data.email).first()
         if existing:
             raise HTTPException(status_code=409, detail="Email already registered.")
     if data.phone:
-        existing = db.query(StudentProfile).filter(StudentProfile.phone == data.phone).first()
+        existing = db.query(User).filter(User.phone == data.phone).first()
         if existing:
             raise HTTPException(status_code=409, detail="Phone number already registered.")
+
+    user_id = str(uuid.uuid4())
+    new_user = User(
+        id=user_id,
+        name=data.name,
+        email=data.email,
+        phone=data.phone,
+        password_hash=hash_password(data.password),
+    )
+    db.add(new_user)
+    db.commit()
+
+    token = create_token(user_id, data.name)
 
     return {
         "token": token,
@@ -151,38 +177,34 @@ def signup(data: UserSignup, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(data: UserLogin, db: Session = Depends(get_db)):
     """
-    Mock login: looks up the student profile by email or phone.
-    If found and female, triggers the sales lead notification.
-    Returns a token and profile summary.
+    Authenticate a user by email or phone + password.
+    Returns a signed JWT token and profile data if available.
     """
     credential = data.credential.strip()
 
-    # Try matching by email or phone
-    profile = db.query(StudentProfile).filter(
+    # Look up user by email or phone in User table
+    user = db.query(User).filter(
         or_(
-            StudentProfile.email == credential,
-            StudentProfile.phone == credential,
+            User.email == credential,
+            User.phone == credential,
         )
     ).first()
 
-    if not profile:
-        # Still allow login with a fresh mock token (for demo/dev purposes)
-        user_id = str(uuid.uuid4())
-        return {
-            "token": f"mock-{user_id}",
-            "user_id": user_id,
-            "profile": None,
-            "message": "No profile found for this credential. Complete onboarding after login."
-        }
+    if not user or user.password_hash != hash_password(data.password):
+        raise HTTPException(status_code=401, detail="Invalid email/phone or password")
 
-    token = f"mock-{profile.user_id}"
+    token = create_token(user.id, user.name)
+
+    # Check if a StudentProfile exists for this user
+    profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
 
     # Trigger lead notification if female
-    trigger_lead_notification(profile)
+    if profile:
+        trigger_lead_notification(profile)
 
     return {
         "token": token,
-        "user_id": profile.user_id,
+        "user_id": user.id,
         "profile": {
             "name": profile.name,
             "email": profile.email,
@@ -191,7 +213,7 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
             "state": profile.state,
             "stream": profile.stream,
             "level": profile.current_level,
-        },
+        } if profile else None,
         "message": "Login successful."
     }
 

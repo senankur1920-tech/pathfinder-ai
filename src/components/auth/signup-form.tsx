@@ -80,24 +80,13 @@ export default function SignupForm() {
         setError(errData?.detail || 'Signup failed. Please try again.');
       }
     } catch {
-      // Fallback to mock if backend is offline
-      const mockId = crypto.randomUUID?.() || `${Date.now()}`;
-      localStorage.setItem('auth_token', `mock-${mockId}`);
-      localStorage.setItem('signup_draft', JSON.stringify({ name, email, phone }));
-      router.push('/onboarding');
+      setError('Unable to connect to server. Please try again later.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleSignup = () => {
-    setIsLoading(true);
-    localStorage.setItem('auth_token', `mock-google-${Date.now()}`);
-    setTimeout(() => {
-      setIsLoading(false);
-      router.push('/onboarding');
-    }, 1000);
-  };
+
 
   return (
     <div className="w-full max-w-md space-y-6 p-6 md:p-8 bg-card/45 backdrop-blur-md rounded-2xl border border-border shadow-xl">
@@ -109,40 +98,6 @@ export default function SignupForm() {
         </p>
       </div>
 
-      {/* Google Button */}
-      <Button
-        variant="outline"
-        className="w-full flex items-center justify-center gap-2.5 h-11"
-        onClick={handleGoogleSignup}
-        disabled={isLoading}
-      >
-        <svg className="h-4 w-4" viewBox="0 0 24 24">
-          <path
-            fill="#EA4335"
-            d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.16 2.709 1.136 6.645l4.13 3.12z"
-          />
-          <path
-            fill="#34A853"
-            d="M16.04 15.345c-1.077.733-2.458 1.182-4.04 1.182a7.077 7.077 0 0 1-6.734-4.855L1.136 14.8c2.024 3.936 6.133 6.645 10.864 6.645 3.127 0 5.964-1.018 8.04-2.827l-4-3.273z"
-          />
-          <path
-            fill="#4285F4"
-            d="M23.864 12.273c0-.818-.073-1.609-.209-2.373H12v4.582h6.69A5.727 5.727 0 0 1 16.04 15.345l4 3.273c2.336-2.155 3.824-5.327 3.824-8.913z"
-          />
-          <path
-            fill="#FBBC05"
-            d="M5.266 11.673a7.032 7.032 0 0 1 0-2.09l-4.13-3.12A11.96 11.96 0 0 0 0 12c0 2.027.505 3.936 1.136 5.682l4.13-4.009z"
-          />
-        </svg>
-        <span>Sign up with Google</span>
-      </Button>
-
-      <div className="relative flex items-center justify-center">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <span className="relative px-3 text-xs uppercase bg-card text-muted-foreground">Or register email</span>
-      </div>
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
